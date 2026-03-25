@@ -4,6 +4,7 @@ import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useToastStore } from "@/stores/toast";
 import { useCartStore } from "@/stores/cart";
+import { http } from "@/api/http";
 
 const router = useRouter();
 const toast = useToastStore();
@@ -77,7 +78,7 @@ async function payNow() {
 
   toast.show("Processing payment...", "info");
   
-const response = await axios.post("http://localhost:5000/api/pay-order", {
+const response = await http.post("/api/pay-order", {
     orderId,
     method: selected.value,
   });

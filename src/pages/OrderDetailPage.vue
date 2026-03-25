@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 import { useToastStore } from "@/stores/toast";
 import { useCartStore } from "@/stores/cart";
+import { http } from "@/api/http";
 const cart = useCartStore();
 
 const API_BASE = "http://localhost:5000";
@@ -92,7 +93,7 @@ async function loadOrder() {
     loading.value = true;
     error.value = null;
     const id = route.params.id;
-    const { data } = await axios.get(`${API_BASE}/api/order/${id}`);
+    const { data } = await http.get(`/api/order/${id}`);
     order.value = data;
   } catch (err: any) {
     console.error(err);
@@ -150,7 +151,7 @@ async function cancelOrder() {
   if (!order.value) return;
   const id = order.value.orderId;
 
-  await axios.post(`${API_BASE}/api/order/${id}/cancel`);
+  await http.post(`/api/order/${id}/cancel`);
   toast.show("Order cancelled", "success");
   loadOrder();
 }
@@ -159,7 +160,7 @@ async function returnOrder() {
   if (!order.value) return;
   const id = order.value.orderId;
 
-  await axios.post(`${API_BASE}/api/order/${id}/return`);
+  await http.post(`/api/order/${id}/return`);
   toast.show("Return requested", "info");
   loadOrder();
 }

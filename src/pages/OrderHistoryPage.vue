@@ -4,6 +4,7 @@ import axios from "axios";
 import { RouterLink } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
+import { http } from "@/api/http";
 
 const auth = useAuthStore();
 const toast = useToastStore();
@@ -27,7 +28,7 @@ async function loadOrders() {
       return;
     }
 
-    const res = await axios.get(`${API_BASE}/api/orders/${auth.user.email}`);
+    const res = await http.get(`/api/orders/me`);
 
     orders.value = res.data;
   } catch (err: any) {

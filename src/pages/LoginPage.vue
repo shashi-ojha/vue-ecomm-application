@@ -228,12 +228,16 @@ onMounted(() => {
           <p class="err" v-if="passwordError">{{ passwordError }}</p>
         </div>
 
+        <button class="link small" @click="$router.push('/auth/forgot-password')">
+          Forgot password?
+        </button>
+
         <button class="primary" :disabled="loading || !validPasswordForm" @click="submitPassword">
           <span v-if="!loading">Login</span>
           <span v-else class="spinner"></span>
         </button>
 
-        <button class="secondary" @click="fillDemo">Use demo credentials</button>
+        <button class="demo-credentials secondary" @click="fillDemo">Use demo credentials</button>
       </template>
 
       <!-- MAGIC LINK -->
@@ -360,6 +364,8 @@ onMounted(() => {
   background:#0b0f14; border:1px solid #30363d; border-radius:10px;
   color:#c9d1d9; padding:10px 14px;
 }
+
+.demo-credentials { margin-top:8px; }
 
 .spinner {
   width:18px; height:18px; border:2px solid #fff; border-right-color:transparent;

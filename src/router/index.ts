@@ -14,6 +14,8 @@ const OrderSuccessPage = () => import("@/pages/OrderSuccessPage.vue");
 const PaymentPage = () => import("@/pages/PaymentPage.vue");
 const OrderHistoryPage = () => import("@/pages/OrderHistoryPage.vue");
 const OrderDetailPage = () => import("@/pages/OrderDetailPage.vue");
+const UserProfilePage = () => import("@/pages/UserProfilePage.vue");
+const UserProfileEditPage = () => import("@/pages/UserProfileEdit.vue");
 
 const AdminDashboard = () => import("@/pages/admin/AdminDashboard.vue");
 // const AdminOrders = () => import("@/pages/admin/AdminOrders.vue");
@@ -59,6 +61,18 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: "/profile",
+    name: "profile",
+    component: UserProfilePage,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: "/profile/edit",
+    name: "profile-edit",
+    component: UserProfileEditPage,
+    meta: { requiresAuth: true },
+  },
+  {
     path: "/order/:id",
     name: "order-detail",
     component: OrderDetailPage,
@@ -96,7 +110,17 @@ const routes: RouteRecordRaw[] = [
     // Add more admin children here...
   ]
 },
+  {
+    path: "/auth/forgot-password",
+    name: "forgot-password",
+    component: () => import("@/pages/auth/ForgotPassword.vue"),
+  },
 
+  {
+    path: "/auth/reset-password",
+    name: "reset-password",
+    component: () => import("@/pages/auth/ResetPassword.vue"),
+  },
   { path: "/forbidden", name: "forbidden", component: () => import("@/pages/ForbiddenPage.vue") },
 
 
