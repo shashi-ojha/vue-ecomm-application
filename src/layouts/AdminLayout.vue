@@ -15,7 +15,12 @@ const items = [
   { to: "/admin", label: "Dashboard", icon: "📊", exact: true },
   { to: "/admin/orders", label: "Orders", icon: "📦" },
   { to: "/admin/users", label: "Users", icon: "🧑‍💼" },
-  // { to: "/admin/products", label: "Products", icon: "🛍️" },
+  { to: "/admin/products", label: "Products", icon: "🛍️" },
+  { to: "/admin/categories", label: "Categories", icon: "📂" },
+  { to: "/admin/variants", label: "Variants", icon: "🎨" },
+  { to: "/admin/skus", label: "SKUs", icon: "🔖" },
+  // { to: "/admin/coupons", label: "Coupons", icon: "🏷️" },
+  // { to: "/admin/analytics", label: "Analytics", icon: "📈" },
   // { to: "/admin/settings", label: "Settings", icon: "⚙️" },
 ];
 

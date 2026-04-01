@@ -83,6 +83,12 @@ const routes: RouteRecordRaw[] = [
     name: "magic-verify", 
     component: () => import("@/pages/MagicVerifyPage.vue") 
   },
+    {
+    path: "/order-details/:orderId",
+    name: "order-tracking",
+    component: () => import("@/pages/OrderTrackingPage.vue"),
+    meta: { requiresAuth: true }
+  },
   
 {
   path: "/admin",
@@ -107,6 +113,31 @@ const routes: RouteRecordRaw[] = [
       component: () => import("@/pages/admin/AdminUsersPage.vue"),
       meta: { title: "Users" }
     },
+    {
+      path: "products",
+      name: "admin-products",
+      component: () => import("@/pages/admin/AdminProductsPage.vue"),
+      meta: { requiresAuth: true, requiresRole: "admin" }
+    },
+    {
+      path: "categories",
+      name: "admin-categories",
+      component: () => import("@/pages/admin/AdminCategoriesPage.vue"),
+      meta: { title: "Categories" }
+    },
+    {
+      path: "variants",
+      name: "admin-variants",
+      component: () => import("@/pages/admin/AdminVariantsPage.vue"),
+      meta: { title: "Variants" }
+    },
+    {
+      path: "skus",
+      name: "admin-skus",
+      component: () => import("@/pages/admin/AdminSkuManager.vue"),
+      meta: { title: "SKUs" }
+    }
+
     // Add more admin children here...
   ]
 },
