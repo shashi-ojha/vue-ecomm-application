@@ -1,544 +1,407 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
-import { http } from "@/api/http";
-import { useToastStore } from "@/stores/toast";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import { fetchProducts } from "@/services/productService";
+import { useToastStore } from "@/stores/toast";
+import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
+import CsvImportModal from "@/components/CsvImportModal.vue";
+import { exportProductsToCSV } from "@/utils/csvExport";
 
 const toast = useToastStore();
 const router = useRouter();
 
-// ✅ Data
-const products = ref<any[]>([]);
-const categories = ref<any[]>([]);
-const variants = ref<any[]>([]);
+// ✅ UI State
 const loading = ref(true);
+const products = ref<any[]>([]);
+const total = ref(0);
+const page = ref(1);
+const totalPages = ref(1);
 
-// ✅ Search
+// ✅ Filters
 const search = ref("");
+const selectedBrand = ref("");
+const selectedCategory = ref("");
 
-// ✅ Modal
-const showModal = ref(false);
-const isEdit = ref(false);
+// ✅ Sort dropdown (UI B)
+const sortOptions = [
+  { label: "Newest", value: "createdAt:desc" },
+  { label: "Oldest", value: "createdAt:asc" },
+  { label: "Price: Low → High", value: "price:asc" },
+  { label: "Price: High → Low", value: "price:desc" },
+  { label: "Stock: Low → High", value: "stock:asc" },
+  { label: "Stock: High → Low", value: "stock:desc" },
+];
+const sortBy = ref("createdAt:desc");
 
-// ✅ Product Form
-const productForm = ref({
-  id: "",
-  title: "",
-  description: "",
-  price: 0,
-  mrp: 0,
-  stock: 0,
-  category: "",
-  image: "",
-  variantSelections: [] as string[],
-});
+// ✅ Pagination limit
+const limit = 20;
 
-// ✅ Load Data
-async function loadData() {
+// ✅ Bulk delete checkboxes
+const selectedRows = ref<number[]>([]);
+const allSelected = computed(() =>
+  selectedRows.value.length === products.value.length
+);
+
+// ✅ Image Preview Modal
+const previewUrl = ref("");
+const previewOpen = ref(false);
+
+// ✅ CSV Import Modal
+const csvModal = ref(false);
+
+// ✅ Load Products from API
+async function load() {
+  loading.value = true;
+
   try {
-    const prodRes = await http.get("/api/products");
-    const catRes = await http.get("/api/categories");
-    const varRes = await http.get("/api/variants");
+    const res = await fetchProducts({
+      page: page.value,
+      limit,
+      sort: sortBy.value,
+      search: search.value,
+      brand: selectedBrand.value,
+      category: selectedCategory.value,
+    });
 
-    products.value = prodRes.data.products || [];
-    categories.value = catRes.data.categories || [];
-    variants.value = varRes.data.variants || [];
+    products.value = res.products;
+    total.value = res.total;
+    totalPages.value = res.totalPages;
+  } catch (err) {
+    toast.show("Failed to load products", "error");
+  }
 
-  } catch {
-    toast.show("Failed to load data", "error");
-  } finally {
-    loading.value = false;
+  loading.value = false;
+}
+
+onMounted(load);
+
+// ✅ Bulk Select / Unselect
+function toggleAll() {
+  if (allSelected.value) {
+    selectedRows.value = [];
+  } else {
+    selectedRows.value = products.value.map(p => p.id);
+  }
+}
+function toggleRow(id: number) {
+  if (selectedRows.value.includes(id)) {
+    selectedRows.value = selectedRows.value.filter(x => x !== id);
+  } else {
+    selectedRows.value.push(id);
   }
 }
 
-// ✅ Search Filter
-const filteredProducts = computed(() => {
-  if (!search.value) return products.value;
-  return products.value.filter((p) =>
-    p.title.toLowerCase().includes(search.value.toLowerCase())
-  );
-});
+// ✅ Bulk Delete
+async function bulkDelete() {
+  if (!selectedRows.value.length) return;
 
-// ✅ Add Product
-function openAddModal() {
-  isEdit.value = false;
-  productForm.value = {
-    id: "",
-    title: "",
-    description: "",
-    price: 0,
-    mrp: 0,
-    stock: 0,
-    category: "",
-    image: "",
-    variantSelections: [],
-  };
-  showModal.value = true;
+  if (!confirm(`Delete ${selectedRows.value.length} selected products?`)) return;
+
+  for (const id of selectedRows.value) {
+    await fetch(`${import.meta.env.VITE_API_URL}/products/${id}`, { method: "DELETE" });
+  }
+
+  toast.show("Deleted selected products", "success");
+  selectedRows.value = [];
+  load();
 }
 
-// ✅ Edit Product
-function openEditModal(p: any) {
-  isEdit.value = true;
-  productForm.value = {
-    id: p._id,
-    title: p.title,
-    description: p.description,
-    price: p.price,
-    mrp: p.mrp,
-    stock: p.stock,
-    category: p.category?._id || "",
-    image: p.images?.[0] || "",
-    variantSelections: p.allowedVariants || [],
-  };
-  showModal.value = true;
-}
+// ✅ CSV Import Handler
+async function handleCsvImport(list: any[]) {
+  csvModal.value = false;
 
-// ✅ Save Product
-async function saveProduct() {
   try {
-    const payload = {
-      title: productForm.value.title,
-      description: productForm.value.description,
-      price: productForm.value.price,
-      mrp: productForm.value.mrp,
-      stock: productForm.value.stock,
-      category: productForm.value.category,
-      images: [productForm.value.image],
-      allowedVariants: productForm.value.variantSelections,
-    };
-
-    if (isEdit.value) {
-      const res = await http.patch(`/api/products/${productForm.value.id}`, payload);
-      const idx = products.value.findIndex((p) => p._id === productForm.value.id);
-      if (idx !== -1) products.value[idx] = res.data.updated;
-      toast.show("Product updated!", "success");
-    } else {
-      const res = await http.post("/api/products", payload);
-      products.value.unshift(res.data.product);
-      toast.show("Product added!", "success");
+    for (const item of list) {
+      await fetch(`${import.meta.env.VITE_API_URL}/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item),
+      });
     }
 
-    showModal.value = false;
-
-  } catch (err: any) {
-    toast.show(err?.response?.data?.message || "Failed to save product", "error");
+    toast.show("CSV Imported successfully!", "success");
+    load();
+  } catch {
+    toast.show("Import failed", "error");
   }
 }
 
-// ✅ Delete Product
-async function deleteProduct(id: string) {
+// ✅ Delete Single Product
+async function deleteProduct(product: any) {
+  if (!confirm(`Delete "${product.title}"?`)) return;
+
   try {
-    await http.delete(`/api/products/${id}`);
-    products.value = products.value.filter((p) => p._id !== id);
-    toast.show("Product deleted", "info");
+    await fetch(`${import.meta.env.VITE_API_URL}/products/${product.id}`, {
+      method: "DELETE",
+    });
+
+    toast.show("Product deleted successfully", "success");
+    load();
   } catch {
     toast.show("Failed to delete product", "error");
   }
 }
 
-onMounted(loadData);
 </script>
 
 <template>
-  <section class="admin-products">
+  <section class="admin-page">
 
-    <!-- ✅ Header -->
+    <!-- ✅ Page Header -->
     <div class="header-row">
-      <h1 class="page-title">Product Catalog</h1>
-      <button class="btn primary lg" @click="openAddModal">
-        + Add Product
-      </button>
-    </div>
-
-    <!-- ✅ Search bar -->
-    <div class="search-bar glass">
-      <input v-model="search" class="search-input" placeholder="Search products..." />
-    </div>
-
-    <!-- ✅ Product Grid -->
-    <div class="product-grid">
-
-      <div
-        class="product-card glass"
-        v-for="p in filteredProducts"
-        :key="p._id"
-      >
-        <!-- Image -->
-        <div class="img-box">
-          <img :src="p.images?.[0]" alt="Product" />
-        </div>
-
-        <!-- Info -->
-        <div class="details">
-          <div class="title">{{ p.title }}</div>
-          <div class="category">{{ p.category?.name }}</div>
-
-          <div class="price-row">
-            <span class="price">₹{{ p.price }}</span>
-            <span class="mrp">₹{{ p.mrp }}</span>
-          </div>
-
-          <div class="stock">Stock: <strong>{{ p.stock }}</strong></div>
-
-          <!-- Variants -->
-          <div class="variants">
-            <span
-              class="variant-chip"
-              v-for="v in p.allowedVariants"
-              :key="v"
-            >
-              {{ v }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="actions">
-          <button class="btn-sm edit" @click="openEditModal(p)">Edit</button>
-          <button class="btn-sm delete" @click="deleteProduct(p._id)">Delete</button>
-          <button class="btn-sm outline" @click="router.push('/admin/skus?product=' + p._id)">SKUs</button>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ✅ Modal -->
-    <div v-if="showModal" class="modal-backdrop">
-      <div class="modal glass animate">
-
-        <h2 class="modal-title">{{ isEdit ? "Edit Product" : "Add Product" }}</h2>
-
-        <div class="modal-form">
-          
-          <div class="field full">
-            <label>Title</label>
-            <input v-model="productForm.title" />
-          </div>
-
-          <div class="field full">
-            <label>Description</label>
-            <textarea v-model="productForm.description" rows="4"></textarea>
-          </div>
-
-          <div class="field">
-            <label>Price</label>
-            <input type="number" v-model="productForm.price" />
-          </div>
-
-          <div class="field">
-            <label>MRP</label>
-            <input type="number" v-model="productForm.mrp" />
-          </div>
-
-          <div class="field">
-            <label>Stock</label>
-            <input type="number" v-model="productForm.stock" />
-          </div>
-
-          <div class="field">
-            <label>Category</label>
-            <select v-model="productForm.category">
-              <option disabled value="">Select category</option>
-              <option v-for="c in categories" :value="c._id" :key="c._id">{{ c.name }}</option>
-            </select>
-          </div>
-
-          <!-- Image URL -->
-          <div class="field full">
-            <label>Product Image URL</label>
-            <input v-model="productForm.image" placeholder="https://..." />
-          </div>
-
-          <!-- Preview -->
-          <div v-if="productForm.image" class="img-preview">
-            <img :src="productForm.image" alt="Preview" />
-          </div>
-
-          <!-- Variants -->
-          <div class="field full">
-            <label>Allowed Variants</label>
-            <div class="variant-options">
-              <label class="v-item" v-for="v in variants" :key="v._id">
-                <input
-                  type="checkbox"
-                  :value="v.name"
-                  v-model="productForm.variantSelections"
-                />
-                <span>{{ v.name }}</span>
-              </label>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Actions -->
-        <div class="modal-actions">
-          <button class="btn primary" @click="saveProduct">Save</button>
-          <button class="btn cancel" @click="showModal = false">Cancel</button>
-        </div>
-
+      <h1>Products</h1>
+      <div class="header-actions">
+        <button class="btn ghost" @click="csvModal = true">📥 Import CSV</button>
+        <button class="btn ghost" @click="exportProductsToCSV(products)">📤 Export CSV</button>
+        <button class="btn primary" @click="router.push('/admin/products/new')">+ Add Product</button>
       </div>
     </div>
+
+    <!-- ✅ Filters -->
+    <div class="filters">
+      <input v-model="search" class="filter-input" placeholder="Search products..." @input="load()" />
+
+      <select v-model="selectedBrand" class="filter-select" @change="load()">
+        <option value="">All Brands</option>
+        <option v-for="p in products" :key="p.id" :value="p.brand">{{ p.brand }}</option>
+      </select>
+
+      <select v-model="selectedCategory" class="filter-select" @change="load()">
+        <option value="">All Categories</option>
+        <option v-for="p in products" :key="p.id" :value="p.category">{{ p.category }}</option>
+      </select>
+
+      <select v-model="sortBy" class="filter-select" @change="load()">
+        <option v-for="s in sortOptions" :value="s.value">{{ s.label }}</option>
+      </select>
+    </div>
+
+    <!-- ✅ Table -->
+    <div class="table-wrapper glass">
+      <table class="products-table">
+
+        <thead>
+          <tr>
+            <th><input type="checkbox" @change="toggleAll" :checked="allSelected"></th>
+            <th>Thumbnail</th>
+            <th>Title</th>
+            <th>Brand</th>
+            <th>Category</th>
+            <th>Price</th>
+            <th>Stock</th>
+            <th style="text-align:center;">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody v-if="!loading">
+          <tr v-for="p in products" :key="p.id">
+
+            <!-- Bulk Checkbox -->
+            <td>
+              <input type="checkbox" :checked="selectedRows.includes(p.id)" @change="toggleRow(p.id)" />
+            </td>
+
+            <!-- Thumbnail -->
+            <td>
+              <img :src="p.thumbnail" class="thumb" @click="previewUrl = p.thumbnail; previewOpen = true" />
+            </td>
+            <td>{{ p.title }}</td>
+            <td>{{ p.brand }}</td>
+            <td>{{ p.category }}</td>
+            <td>₹{{ p.price }}</td>
+
+            <td :class="{ low: p.stock < 5 }">{{ p.stock }}</td>
+
+            <td class="actions-cell">
+              <button class="icon-btn edit" @click="router.push('/admin/products/edit/' + p.id)">✏️</button>
+              <button class="icon-btn del" @click="deleteProduct(p)">🗑</button>
+            </td>
+
+          </tr>
+
+          <tr v-if="products.length === 0">
+            <td colspan="8" class="empty">No products found.</td>
+          </tr>
+        </tbody>
+
+        <!-- Loading -->
+        <tbody v-if="loading">
+          <tr><td colspan="8" class="loading">Loading...</td></tr>
+        </tbody>
+
+      </table>
+    </div>
+
+    <!-- ✅ Bulk Delete Button -->
+    <button v-if="selectedRows.length" class="btn danger bulk-delete" @click="bulkDelete">
+      Delete Selected ({{ selectedRows.length }})
+    </button>
+
+    <!-- ✅ Pagination -->
+    <div class="pagination">
+      <button :disabled="page === 1" @click="page--; load()">Prev</button>
+      <span>Page {{ page }} of {{ totalPages }}</span>
+      <button :disabled="page === totalPages" @click="page++; load()">Next</button>
+    </div>
+
+    <!-- ✅ Modals -->
+    <ImagePreviewModal :url="previewUrl" :show="previewOpen" @close="previewOpen=false" />
+    <CsvImportModal :show="csvModal" @close="csvModal=false" @import="handleCsvImport" />
 
   </section>
 </template>
 
 <style scoped>
-.admin-products {
-  padding: 30px 26px;
-  min-height: 100vh;
+/* BASE */
+.admin-page {
+  padding: 30px;
   background: #0b0f14;
+  min-height: 100vh;
   color: #e6edf3;
-  font-family: "Inter", sans-serif;
 }
 
-/* Header */
+/* HEADER */
 .header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 26px;
 }
 
-.page-title {
-  font-size: 2rem;
-  font-weight: 800;
-}
-
-/* Search */
-.search-bar {
-  padding: 14px;
-  border-radius: 14px;
-  margin-bottom: 24px;
-}
-
-.search-input {
-  width: 100%;
-  padding: 12px;
-  background: #0d1117;
-  border: 1px solid #30363d;
-  border-radius: 10px;
-  color: #e6edf3;
-}
-
-/* Product Grid */
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px,1fr));
-  gap: 20px;
-}
-
-/* Card */
-.product-card {
-  padding: 16px;
-  border-radius: 16px;
-  background: rgba(13,17,23,.55);
-  border: 1px solid #30363d;
-  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+.header-actions {
   display: flex;
-  flex-direction: column;
-  transition: .2s;
-}
-
-.product-card:hover {
-  transform: translateY(-4px);
-  border-color: #238636;
-}
-
-/* Image */
-.img-box img {
-  width: 100%;
-  height: 170px;
-  object-fit: contain;
-  background: #11161d;
-  padding: 10px;
-  border-radius: 12px;
-}
-
-/* Details */
-.details {
-  margin-top: 12px;
-}
-
-.details .title {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.category {
-  opacity: .75;
-  font-size: .9rem;
-  margin-top: 2px;
-}
-
-.price-row {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.price {
-  color: #23c55e;
-  font-weight: 700;
-}
-
-.mrp {
-  opacity: .5;
-  text-decoration: line-through;
-}
-
-.stock {
-  margin-top: 6px;
-  opacity: .9;
-}
-
-/* Variants */
-.variants {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.variant-chip {
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid #30363d;
-  background: rgba(255,255,255,.08);
-  font-size: .85rem;
-}
-
-/* Card Actions */
-.actions {
-  display: flex;
-  gap: 10px;
-  margin-top: auto;
-}
-
-.btn-sm {
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: none;
-  font-size: .85rem;
-  cursor: pointer;
-}
-
-.btn-sm.edit { background: #238636; color: white; }
-.btn-sm.delete { background: #b91c1c; color: white; }
-.btn-sm.outline {
-  background: transparent;
-  border: 1px solid #4a5568;
-  color: #cbd5e0;
-}
-
-/* Modal */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  backdrop-filter: blur(8px);
-  background: rgba(0,0,0,.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal {
-  width: min(560px, 95vw);
-  padding: 26px;
-  border-radius: 18px;
-  background: rgba(13,17,23,.85);
-  border: 1px solid #30363d;
-  animation: pop .25s ease;
-}
-
-@keyframes pop {
-  from { transform: scale(.85); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-.modal-title {
-  font-size: 1.4rem;
-  font-weight: 700;
-  margin-bottom: 14px;
-}
-
-/* Form */
-.modal-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.full {
-  grid-column: span 2;
-}
-
-.field label {
-  opacity: .75;
-  font-size: .85rem;
-  margin-bottom: 4px;
-}
-
-.field input,
-.field textarea,
-.field select {
-  width: 100%;
-  padding: 12px;
-  background: #0b0f14;
-  border: 1px solid #30363d;
-  border-radius: 10px;
-  color: #e6edf3;
-  font-size: .9rem;
-}
-
-/* Image Preview */
-.img-preview img {
-  margin-top: 8px;
-  width: 100%;
-  height: 140px;
-  object-fit: contain;
-  background: #1a1f25;
-  border-radius: 10px;
-  padding: 6px;
-  border: 1px solid #30363d;
-}
-
-/* Variants */
-.variant-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.v-item {
-  background: rgba(255,255,255,.08);
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid #30363d;
-  cursor: pointer;
-  display: flex;
-  gap: 6px;
-}
-
-.modal-actions {
-  margin-top: 18px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
 }
 
 .btn.primary {
   background: #238636;
-  padding: 10px 18px;
+  padding: 10px 16px;
   border-radius: 10px;
   color: white;
-  font-weight: 700;
+  cursor: pointer;
 }
 
-.btn.cancel {
-  background: #444;
-  padding: 10px 18px;
+.btn.ghost {
+  background: transparent;
+  border: 1px solid #3a3f47;
+  padding: 10px 14px;
   border-radius: 10px;
+  color: #9da7b1;
+}
+
+.btn.danger {
+  background: #b91c1c;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+
+/* FILTERS */
+.filters {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.filter-input,
+.filter-select {
+  padding: 10px;
+  border-radius: 10px;
+  background: #11161d;
+  border: 1px solid #30363d;
+  color: white;
+}
+
+/* TABLE WRAPPER */
+.table-wrapper {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.glass {
+  background: rgba(13,17,23,.6);
+  border: 1px solid #30363d;
+}
+
+.products-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.products-table th {
+  background: rgba(255,255,255,.05);
+  padding: 12px;
+  border-bottom: 1px solid #30363d;
+}
+
+.products-table td {
+  padding: 14px;
+  border-bottom: 1px solid #21262d;
+}
+
+/* THUMB */
+.thumb {
+  width: 54px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #30363d;
+  cursor: zoom-in;
+}
+
+/* Title ellipsis */
+.title-col {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Stock */
+.low {
+  color: #ff6b6b;
+}
+
+/* ACTION BUTTONS */
+.actions-cell {
+  text-align: center;
+}
+
+.icon-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  margin-left: 6px;
+}
+
+.icon-btn.edit {
+  background: #1f6feb;
+  color: white;
+}
+
+.icon-btn.del {
+  background: #b91c1c;
+  color: white;
+}
+
+/* BULK DELETE */
+.bulk-delete {
+  margin-top: 16px;
+}
+
+/* PAGINATION */
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.pagination button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #11161d;
+  border: 1px solid #30363d;
   color: white;
 }
 </style>

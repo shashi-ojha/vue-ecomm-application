@@ -120,6 +120,12 @@ const routes: RouteRecordRaw[] = [
       meta: { requiresAuth: true, requiresRole: "admin" }
     },
     {
+      path: "products/new",
+      name: "admin-products-new",
+      component: () => import("@/pages/admin/AdminProductWizard.vue"),
+      meta: { requiresAuth: true, requiresRole: "admin" }
+    },
+    {
       path: "categories",
       name: "admin-categories",
       component: () => import("@/pages/admin/AdminCategoriesPage.vue"),

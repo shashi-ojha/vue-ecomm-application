@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{
-  categories: string[]
+  categories: { _id: string; name: string }[]
   selectedCategory: string
   searchTerm: string
   sortBy: 'relevance' | 'price-asc' | 'price-desc' | 'title-asc' | 'title-desc'
@@ -51,20 +51,28 @@ function onCategoryClick(cat: string) {
           All
         </li>
         <li
-          v-for="cat in categories"
-          :key="cat"
-          :class="['cat', { active: selectedCategory === cat }]"
-          @click="onCategoryClick(cat)"
-        >
-          {{ cat }}
-        </li>
+        v-for="cat in categories"
+        :key="cat._id"
+        :class="['cat', { active: selectedCategory === cat._id }]"
+        @click="onCategoryClick(cat._id)"
+      >
+        {{ cat.name }}
+      </li>
+
       </ul>
     </div>
   </aside>
 </template>
 
 <style scoped>
-.sidebar { min-width: 240px; max-width: 280px; background: #0d1117; border: 1px solid #30363d; border-radius: 12px; padding: 16px; height: fit-content; position: sticky; top: 72px; }
+.sidebar {
+  backdrop-filter: blur(14px);
+  background: rgba(13,17,23,.55);
+  border: 1px solid #30363d;
+  border-radius: 16px;
+  padding: 18px 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,.30);
+}
 .filter-block { margin-bottom: 16px; }
 .label { display: block; color: #9da7b1; margin-bottom: 6px; font-size: 0.9rem; }
 .input, .select { width: 100%; background: #0b0f14; border: 1px solid #30363d; color: #c9d1d9; border-radius: 8px; padding: 8px 10px; }

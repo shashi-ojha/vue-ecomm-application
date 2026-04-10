@@ -11,8 +11,18 @@ import Breadcrumbs from '@/components/Breadcrumbs.vue'
 const route = useRoute()
 const router = useRouter()
 
-const products = ref<Product[]>([])
-const categories = ref<string[]>([])
+ const products = ref<Product[]>([])
+  const categories = computed(() => {
+  const map = new Map<string, string>()
+
+  products.value.forEach(p => {
+    if (p.category?._id) {
+      map.set(p.category._id, p.category.name)
+    }
+  })
+
+  return Array.from(map.entries()).map(([ _id, name ]) => ({ _id, name }))
+})
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -34,9 +44,8 @@ currentPage.value = Number(route.query.page) || 1
 
 onMounted(async () => {
   try {
-    const [prod, cats] = await Promise.all([fetchProducts(), fetchCategories()])
+    const [prod] = await Promise.all([fetchProducts({})])
     products.value = prod
-    categories.value = cats
   } catch (e: any) {
     error.value = e?.message ?? 'Failed to load'
   } finally {
@@ -70,7 +79,7 @@ watch(() => route.query, (q) => {
 const filtered = computed(() => {
   let arr = products.value
   if (selectedCategory.value !== 'all') {
-    arr = arr.filter(p => p.category === selectedCategory.value)
+    arr = arr.filter(p => p.category?._id === selectedCategory.value)
   }
   const q = normalize(searchTerm.value)
   if (q) arr = arr.filter(p => normalize(p.title + ' ' + p.description).includes(q))
@@ -78,15 +87,17 @@ const filtered = computed(() => {
 })
 
 const sorted = computed(() => {
-  const arr = [...filtered.value]
+  const safe = Array.isArray(filtered.value) ? filtered.value : [];
+  const arr = [...safe];
+
   switch (sortBy.value) {
-    case 'price-asc':  return arr.sort((a,b) => a.price - b.price)
-    case 'price-desc': return arr.sort((a,b) => b.price - a.price)
-    case 'title-asc':  return arr.sort((a,b) => a.title.localeCompare(b.title))
-    case 'title-desc': return arr.sort((a,b) => b.title.localeCompare(a.title))
-    default:           return arr // relevance = original order
+    case 'price-asc':  return arr.sort((a,b) => a.price - b.price);
+    case 'price-desc': return arr.sort((a,b) => b.price - a.price);
+    case 'title-asc':  return arr.sort((a,b) => a.title.localeCompare(b.title));
+    case 'title-desc': return arr.sort((a,b) => b.title.localeCompare(a.title));
+    default:           return arr;
   }
-})
+});
 
 const totalPages = computed(() => Math.max(1, Math.ceil(sorted.value.length / pageSize)))
 const paginated = computed(() => {
@@ -105,6 +116,12 @@ function prevPage() { if (currentPage.value > 1) { currentPage.value--; syncUrl(
 const showFilters = ref(false)
 function toggleFilters() { showFilters.value = !showFilters.value }
 function closeFilters() { showFilters.value = false }
+
+window.addEventListener("scroll", () => {
+  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) {
+    nextPage()
+  }
+})
 </script>
 
 <template>
@@ -137,12 +154,31 @@ function closeFilters() { showFilters.value = false }
       <section class="product-section">
         <div v-if="error" class="error">{{ error }}</div>
 
-        <div class="product-grid">
-          <SkeletonCard v-if="loading" v-for="i in 9" :key="i" />
-          <ProductCard v-else v-for="p in paginated" :key="p.id" :product="p" />
+        <div class="chip-container">
+          <div
+            v-for="c in categories"
+            :key="c._id"
+            class="chip"
+            :class="{ active: selectedCategory === c._id }"
+            @click="onCategoryChange(c._id)"
+          >
+            {{ c.name }}
+          </div>
+
+          <div class="chip" :class="{ active: selectedCategory === 'all' }" @click="onCategoryChange('all')">
+            All
+          </div>
         </div>
 
-        <p v-if="!loading && !paginated.length" class="empty">No products found.</p>
+        <div class="product-grid">
+          <SkeletonCard v-if="loading" v-for="i in 9" :key="i" />
+          <ProductCard v-else v-for="p in paginated" :key="p._id" :product="p" />
+        </div>
+
+        <div v-if="!loading && !paginated.length" class="empty-state">
+          <img src="../assets/empty.png" />
+          <p>No products match your filters</p>
+        </div>
 
         <div class="pagination" v-if="!loading && totalPages > 1">
           <button @click="prevPage" :disabled="currentPage === 1">Prev</button>
@@ -173,9 +209,19 @@ function closeFilters() { showFilters.value = false }
 
 <style scoped>
 /* Container */
-.page { max-width: 1400px; margin: 20px 45px; padding: 0 16px; color: var(--text, #c9d1d9); }
-.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-h1 { margin: 0; }
+.page { max-width: 1400px; margin: 20px 45px; padding: 0 16px; color: var(--text, #e6edf3); }
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.page-head h1 {
+  font-size: 2rem;
+  font-weight: 800;
+}
 
 /* Mobile filter toggle button (hidden on desktop) */
 .filter-toggle {
@@ -187,16 +233,17 @@ h1 { margin: 0; }
 /* Layout */
 .product-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 24px;
-  margin-top: 18px;
+  grid-template-columns: 300px 1fr;
+  gap: 34px;
+  margin-top: 24px;
 }
 
 /* Sticky Sidebar */
 .sidebar-container {
   position: sticky;
-  top: 84px; /* match your header height */
-  height: fit-content;
+  top: 90px; /* match your header height */
+  /* height: fit-content; */
+  width: 280px;
 }
 
 /* Grid area */
@@ -212,9 +259,76 @@ h1 { margin: 0; }
 .empty { margin: 12px 0; color: #9da7b1; text-align: center; }
 
 /* Pagination */
-.pagination { margin: 18px 0; display: flex; gap: 12px; align-items: center; justify-content: center; }
-.pagination button { background: #238636; border: 0; color: #fff; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
-.pagination button:disabled { background: #555; cursor: not-allowed; }
+.pagination {
+  margin: 30px 0;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+}
+
+.pagination button {
+  background: rgba(255,255,255,.08);
+  border: 1px solid #3b4552;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.pagination button:hover:not(:disabled) {
+  background: #238636;
+  border-color: #238636;
+}
+
+.pagination button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.chip-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.chip {
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 20px;
+  cursor: pointer;
+  border: 1px solid #30363d;
+  transition: .25s;
+}
+
+.chip:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.chip.active {
+  background: #238636;
+  border-color: #238636;
+  color: white;
+}
+
+.product-grid > * {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: fadeUp .45s ease forwards;
+}
+
+.product-grid > *:nth-child(2) { animation-delay: .04s; }
+.product-grid > *:nth-child(3) { animation-delay: .08s; }
+.product-grid > *:nth-child(4) { animation-delay: .12s; }
+
+@keyframes fadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 /* Tablet */
 @media (max-width: 1100px) {
@@ -240,4 +354,13 @@ h1 { margin: 0; }
 }
 .slide-enter-active, .slide-leave-active { transition: transform .25s ease, opacity .2s ease; }
 .slide-enter-from, .slide-leave-to { transform: translateX(-8px); opacity: 0; }
+.empty-state {
+  margin-top: 40px;
+  text-align: center;
+  opacity: .75;
+}
+.empty-state img {
+  width: 200px;
+  opacity: .4;
+}
 </style>

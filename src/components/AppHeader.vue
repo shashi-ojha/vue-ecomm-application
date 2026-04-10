@@ -52,6 +52,12 @@ const avatarText = computed(() => {
           Admin
         </RouterLink>
 
+         <!-- Cart -->
+          <RouterLink class="cart" to="/cart">
+            🛒
+            <span v-if="cart.count" class="badge">{{ cart.count }}</span>
+          </RouterLink>
+
 
         <!-- Not logged in -->
         <RouterLink v-if="!auth.isLoggedIn" to="/login" class="login-btn">
@@ -61,12 +67,6 @@ const avatarText = computed(() => {
         <!-- Logged in -->
         <!-- USER MENU (when logged in) -->
         <div v-if="auth.isLoggedIn" class="user-wrapper">
-          
-          <!-- Cart -->
-          <RouterLink class="cart" to="/cart">
-            🛒
-            <span v-if="cart.count" class="badge">{{ cart.count }}</span>
-          </RouterLink>
 
           <!-- Avatar -->
           <button class="avatar-btn" @click="menuOpen = !menuOpen">
